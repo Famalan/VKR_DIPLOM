@@ -1,0 +1,40 @@
+@startuml
+set separator none
+title AI Interview Platform – System Context / Containers
+
+left to right direction
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+
+Person(Interviewer, "Интервьюер", "Проводит интервью, видит подсказки")
+Person(Candidate, "Кандидат", "Отвечает на вопросы в видеозвонке")
+
+System_Boundary(App, "AI Interview Platform"){
+  Container(Frontend, "Frontend", "React + WebRTC", "Видеозвонок 1:1, панель подсказок, WebSocket аудио")
+  Container(Backend, "Backend API", "FastAPI (REST/WS)", "Сессии, аутентификация/роли, прокси к STT/LLM")
+  Container(MLSvc, "ML Orchestrator", "Python + Redis Queue", "Стрим‑обработка: вызовы STT API и LLM")
+  ContainerDb(DB, "DB", "PostgreSQL", "Сессии, транскрипты, отчёты, права")
+  Container(S3, "Object Storage", "S3‑совместимое", "Записи (опционально)")
+}
+
+System_Ext(STT, "Cloud STT API", "SpeechKit/SaluteSpeech/Tinkoff/VK/Whisper API")
+System_Ext(LLM, "LLM Provider", "YaGPT/GigaChat/OpenAI")
+System_Ext(TURN, "STUN/TURN", "coturn")
+
+Rel(Interviewer, Frontend, "HTTPS/WebRTC")
+Rel(Candidate, Frontend, "HTTPS/WebRTC")
+Rel(Frontend, TURN, "STUN/TURN (NAT traversal)")
+Rel(Frontend, Backend, "WebSocket: аудио‑фреймы; REST: управление")
+Rel(Backend, MLSvc, "HTTP/gRPC: стрим аудио → очередь задач")
+Rel(MLSvc, STT, "HTTPS: распознавание речи (RU)")
+Rel(MLSvc, LLM, "HTTPS: анализ ответов/подсказки")
+Rel(Backend, DB, "JDBC: метаданные, транскрипты, отчёты")
+Rel(Backend, S3, "S3 API: записи (опц.)")
+Rel(Interviewer, Backend, "JWT аутентификация")
+
+SHOW_LEGEND(true)
+@enduml
+
+
