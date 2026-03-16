@@ -40,9 +40,11 @@ export default function HomePage() {
   };
 
   const joinRoom = () => {
-    if (joinRoomId.trim()) {
-      router.push(`/room/${joinRoomId.trim()}`);
-    }
+    const raw = joinRoomId.trim();
+    if (!raw) return;
+    const match = raw.match(/room\/([a-f0-9-]+)/i);
+    const id = match ? match[1] : raw;
+    router.push(`/room/${id}`);
   };
 
   const copyLink = async () => {

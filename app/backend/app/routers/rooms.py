@@ -9,19 +9,33 @@ from app.services.room_service import (
     create_room,
     get_room_by_id,
     update_room_status,
-    get_all_rooms
+    get_all_rooms,
 )
+from app.services.auth_service import create_room_token
 
 router = APIRouter()
 
 
-@router.post("", response_model=RoomResponse)
+@router.post("")
 async def create_new_room(
     room_data: RoomCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    room = await create_room(db)
-    return room
+    room = await create_room(db, position=room_data.position)
+
+    token = create_room_token(
+        room_id=str(room.id),
+        role="interviewer",
+    )
+
+    return {
+        "id": room.id,
+        "status": room.status,
+        "position": room.position,
+        "created_at": room.created_at,
+        "ended_at": room.ended_at,
+        "token": token,
+    }
 
 
 @router.get("", response_model=list[RoomResponse])
@@ -42,7 +56,7 @@ async def get_room(room_id: UUID, db: AsyncSession = Depends(get_db)):
 async def change_room_status(
     room_id: UUID,
     status_update: RoomStatusUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     room = await update_room_status(db, room_id, status_update.status)
     if room is None:

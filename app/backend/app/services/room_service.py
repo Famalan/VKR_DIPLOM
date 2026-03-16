@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Room
 
 
-async def create_room(db: AsyncSession) -> Room:
-    room = Room()
+async def create_room(db: AsyncSession, position: str | None = None) -> Room:
+    room = Room(position=position)
     db.add(room)
     await db.commit()
     await db.refresh(room)
