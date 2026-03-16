@@ -64,10 +64,13 @@ fi
 echo "  Domain:  $DOMAIN"
 echo "  LiveKit: $LIVEKIT_DOMAIN"
 
-echo "[4/5] Building and starting services..."
+echo "[4/5] Injecting LiveKit secret into livekit.yaml..."
+sed -i "s|CHANGE_ME_LIVEKIT_SECRET|${LIVEKIT_API_SECRET}|g" livekit.yaml
+
+echo "[5/6] Building and starting services..."
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 
-echo "[5/5] Checking service status..."
+echo "[6/6] Checking service status..."
 sleep 5
 docker compose -f docker-compose.prod.yml ps
 
