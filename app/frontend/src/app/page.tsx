@@ -11,6 +11,8 @@ export default function HomePage() {
   const [joinRoomId, setJoinRoomId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const [roomToken, setRoomToken] = useState<string | null>(null);
+
   const createRoom = async () => {
     setIsCreating(true);
     setError(null);
@@ -29,8 +31,9 @@ export default function HomePage() {
       }
 
       const room = await response.json();
-      const link = `${window.location.origin}/room/${room.id}`;
-      setRoomLink(link);
+      const candidateLink = `${window.location.origin}/room/${room.id}?role=candidate`;
+      setRoomLink(candidateLink);
+      setRoomToken(room.token || null);
     } catch (err) {
       console.error("Failed to create room:", err);
       setError("Не удалось создать комнату. Проверьте подключение к серверу.");
@@ -55,8 +58,14 @@ export default function HomePage() {
 
   const goToRoom = () => {
     if (roomLink) {
-      const roomId = roomLink.split("/room/")[1];
-      router.push(`/room/${roomId}`);
+      const urlPart = roomLink.split("/room/")[1];
+      const roomId = urlPart.split("?")[0];
+      const params = new URLSearchParams();
+      params.set("role", "interviewer");
+      if (roomToken) {
+        params.set("token", roomToken);
+      }
+      router.push(`/room/${roomId}?${params.toString()}`);
     }
   };
 
@@ -133,7 +142,9 @@ export default function HomePage() {
               </div>
 
               <p className="text-sm text-gray-400 text-center">
-                Отправьте ссылку собеседнику для подключения
+                Отправьте ссылку кандидату для подключения.
+                <br />
+                Вы войдёте как интервьюер.
               </p>
             </div>
           )}

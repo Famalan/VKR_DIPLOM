@@ -7,6 +7,7 @@ interface UseLiveKitProps {
   roomId: string;
   userId: string;
   role?: string;
+  roomToken?: string;
 }
 
 interface UseLiveKitReturn {
@@ -21,6 +22,7 @@ export function useLiveKit({
   roomId,
   userId,
   role = "candidate",
+  roomToken,
 }: UseLiveKitProps): UseLiveKitReturn {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -33,9 +35,16 @@ export function useLiveKit({
     setError(null);
 
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (roomToken) {
+        headers["Authorization"] = `Bearer ${roomToken}`;
+      }
+
       const response = await fetch(`${config.apiUrl}/api/livekit/token`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           room_id: roomId,
           user_id: userId,
@@ -44,7 +53,8 @@ export function useLiveKit({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to get LiveKit token");
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || "Failed to get LiveKit token");
       }
 
       const data = await response.json();
@@ -57,7 +67,7 @@ export function useLiveKit({
     } finally {
       setIsLoading(false);
     }
-  }, [roomId, userId, role]);
+  }, [roomId, userId, role, roomToken]);
 
   return { token, wsUrl, isLoading, error, fetchToken };
 }

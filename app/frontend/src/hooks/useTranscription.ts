@@ -2,9 +2,12 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { config } from "@/lib/config";
+import type { AIHint } from "@/hooks/useAIHints";
 
 interface TranscriptionResult {
   userId: string;
+  role: string;
+  roleLabel: string;
   text: string;
   isFinal: boolean;
 }
@@ -12,20 +15,25 @@ interface TranscriptionResult {
 interface UseTranscriptionProps {
   roomId: string;
   userId: string;
+  role: "interviewer" | "candidate";
   stream: MediaStream | null;
   enabled: boolean;
+  onHintReceived?: (hint: AIHint) => void;
 }
 
 export function useTranscription({
   roomId,
   userId,
+  role,
   stream,
   enabled,
+  onHintReceived,
 }: UseTranscriptionProps) {
   const [transcriptions, setTranscriptions] = useState<TranscriptionResult[]>(
     []
   );
   const [isConnected, setIsConnected] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const [currentText, setCurrentText] = useState("");
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -43,23 +51,27 @@ export function useTranscription({
     }
 
     try {
-      const wsUrl = `${config.wsUrl}/ws/transcribe/${roomId}/${userId}`;
+      const wsUrl = `${config.wsUrl}/ws/transcribe/${roomId}/${userId}/${role}`;
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
         console.log("[STT] WebSocket connected");
         setIsConnected(true);
+        setIsReconnecting(false);
       };
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
 
         if (data.type === "transcription") {
+          setIsReconnecting(false);
           if (data.isFinal) {
             setTranscriptions((prev) => [
               ...prev,
               {
                 userId: data.userId,
+                role: data.role || "candidate",
+                roleLabel: data.roleLabel || "Кандидат",
                 text: data.text,
                 isFinal: true,
               },
@@ -68,6 +80,24 @@ export function useTranscription({
           } else {
             setCurrentText(data.text);
           }
+        } else if (data.type === "hint") {
+          if (onHintReceived && data.payload) {
+            onHintReceived({
+              id: `hint_${Date.now()}`,
+              dbId: data.payload.dbId || null,
+              hintType: data.payload.hintType || null,
+              title: data.payload.title || "",
+              actionableQuestion: data.payload.actionableQuestion || "",
+              text: data.payload.text || "",
+              sourceText: data.payload.sourceText || "",
+              timestamp: new Date(),
+              tokensUsed: data.payload.tokensUsed || 0,
+              isAccepted: null,
+            });
+          }
+        } else if (data.type === "reconnecting") {
+          setIsReconnecting(true);
+          setCurrentText("");
         } else if (data.type === "error") {
           console.error("[STT] Server error:", data.message);
         }
@@ -76,6 +106,7 @@ export function useTranscription({
       ws.onclose = () => {
         console.log("[STT] WebSocket closed");
         setIsConnected(false);
+        setIsReconnecting(false);
       };
 
       ws.onerror = (err) => {
@@ -118,7 +149,7 @@ export function useTranscription({
       console.error("[STT] Failed to start streaming:", error);
       setIsConnected(false);
     }
-  }, [stream, roomId, userId]);
+  }, [stream, roomId, userId, role, onHintReceived]);
 
   const stopStreaming = useCallback(() => {
     if (workletNodeRef.current) {
@@ -138,6 +169,7 @@ export function useTranscription({
       wsRef.current = null;
     }
     setIsConnected(false);
+    setIsReconnecting(false);
     console.log("[STT] Streaming stopped");
   }, []);
 
@@ -162,6 +194,7 @@ export function useTranscription({
     transcriptions,
     currentText,
     isConnected,
+    isReconnecting,
     clearTranscriptions,
   };
 }

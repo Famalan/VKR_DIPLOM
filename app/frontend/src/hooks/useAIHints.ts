@@ -1,15 +1,19 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { config } from "@/lib/config";
 
-interface AIHint {
+export interface AIHint {
   id: string;
-  text: string;
+  dbId: string | null;
   hintType: string | null;
+  title: string;
+  actionableQuestion: string;
+  text: string;
   sourceText: string;
   timestamp: Date;
   tokensUsed: number;
+  isAccepted: boolean | null;
 }
 
 interface UseAIHintsProps {
@@ -20,9 +24,9 @@ interface UseAIHintsReturn {
   hints: AIHint[];
   isLoading: boolean;
   error: string | null;
-  generateHint: (text: string) => Promise<void>;
+  addHint: (hint: AIHint) => void;
   generateSummary: () => Promise<string | null>;
-  shouldTrigger: (text: string) => boolean;
+  submitFeedback: (hintId: string, isAccepted: boolean) => Promise<void>;
   clearHints: () => void;
 }
 
@@ -31,60 +35,37 @@ export function useAIHints({ roomId }: UseAIHintsProps): UseAIHintsReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const lastHintTimeRef = useRef<number>(0);
-  const wordsSinceLastHintRef = useRef<number>(0);
-
-  const shouldTrigger = useCallback((text: string): boolean => {
-    const wordCount = text.split(/\s+/).filter(Boolean).length;
-    wordsSinceLastHintRef.current += wordCount;
-
-    const timeSinceLastHint = Date.now() - lastHintTimeRef.current;
-    const enoughPause = timeSinceLastHint > 3000;
-    const enoughWords = wordsSinceLastHintRef.current >= 5;
-
-    return enoughPause && enoughWords;
+  const addHint = useCallback((hint: AIHint) => {
+    setHints((prev) => [...prev, hint]);
   }, []);
 
-  const generateHint = useCallback(
-    async (text: string) => {
-      if (!text.trim() || text.length < 10) return;
-
-      setIsLoading(true);
-      setError(null);
+  const submitFeedback = useCallback(
+    async (hintId: string, isAccepted: boolean) => {
+      const hint = hints.find((h) => h.id === hintId);
+      if (!hint?.dbId) return;
 
       try {
-        const response = await fetch(`${config.apiUrl}/api/ai/hint`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ room_id: roomId, text }),
-        });
+        const response = await fetch(
+          `${config.apiUrl}/api/ai/hint/${hint.dbId}/feedback`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ is_accepted: isAccepted }),
+          }
+        );
 
-        if (!response.ok) {
-          throw new Error("Failed to generate hint");
-        }
+        if (!response.ok) return;
 
-        const data = await response.json();
-
-        const newHint: AIHint = {
-          id: `hint_${Date.now()}`,
-          text: data.hint,
-          hintType: data.hint_type || null,
-          sourceText: text,
-          timestamp: new Date(),
-          tokensUsed: data.tokens_used || 0,
-        };
-
-        setHints((prev) => [...prev, newHint]);
-        lastHintTimeRef.current = Date.now();
-        wordsSinceLastHintRef.current = 0;
+        setHints((prev) =>
+          prev.map((h) =>
+            h.id === hintId ? { ...h, isAccepted } : h
+          )
+        );
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error");
-        console.error("[AI Hints] Error:", err);
-      } finally {
-        setIsLoading(false);
+        console.error("[AI Hints] Feedback error:", err);
       }
     },
-    [roomId]
+    [hints]
   );
 
   const generateSummary = useCallback(async (): Promise<string | null> => {
@@ -116,17 +97,15 @@ export function useAIHints({ roomId }: UseAIHintsProps): UseAIHintsReturn {
   const clearHints = useCallback(() => {
     setHints([]);
     setError(null);
-    wordsSinceLastHintRef.current = 0;
-    lastHintTimeRef.current = 0;
   }, []);
 
   return {
     hints,
     isLoading,
     error,
-    generateHint,
+    addHint,
     generateSummary,
-    shouldTrigger,
+    submitFeedback,
     clearHints,
   };
 }

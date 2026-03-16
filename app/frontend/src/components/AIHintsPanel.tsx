@@ -1,27 +1,51 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-
-interface AIHint {
-  id: string;
-  text: string;
-  hintType: string | null;
-  sourceText: string;
-  timestamp: Date;
-  tokensUsed: number;
-}
+import type { AIHint } from "@/hooks/useAIHints";
 
 interface AIHintsPanelProps {
   hints: AIHint[];
   isLoading: boolean;
   error: string | null;
   onGenerateSummary?: () => void;
+  onFeedback: (hintId: string, isAccepted: boolean) => void;
 }
 
-const HINT_TYPE_STYLES: Record<string, { bg: string; label: string }> = {
-  "УТОЧНЕНИЕ": { bg: "bg-blue-500/20 border-blue-500/40", label: "Уточнение" },
-  "ПРОБЕЛ": { bg: "bg-yellow-500/20 border-yellow-500/40", label: "Пробел" },
-  "STAR": { bg: "bg-green-500/20 border-green-500/40", label: "STAR" },
+const HINT_TYPE_CONFIG: Record<
+  string,
+  { bg: string; badge: string; icon: string; label: string }
+> = {
+  FACT_CHECK: {
+    bg: "border-red-500/40 bg-red-500/10",
+    badge: "bg-red-500/30 text-red-200",
+    icon: "\u{1F534}",
+    label: "Факт-чек",
+  },
+  WATER: {
+    bg: "border-yellow-500/40 bg-yellow-500/10",
+    badge: "bg-yellow-500/30 text-yellow-200",
+    icon: "\u{1F7E1}",
+    label: "Вода",
+  },
+  DEEP_DIVE: {
+    bg: "border-blue-500/40 bg-blue-500/10",
+    badge: "bg-blue-500/30 text-blue-200",
+    icon: "\u{1F535}",
+    label: "Копнуть глубже",
+  },
+  SOFT_SKILLS: {
+    bg: "border-purple-500/40 bg-purple-500/10",
+    badge: "bg-purple-500/30 text-purple-200",
+    icon: "\u{1F7E3}",
+    label: "Soft Skills",
+  },
+};
+
+const DEFAULT_STYLE = {
+  bg: "border-gray-500/40 bg-gray-500/10",
+  badge: "bg-gray-500/30 text-gray-200",
+  icon: "\u{26AA}",
+  label: "Подсказка",
 };
 
 export function AIHintsPanel({
@@ -29,6 +53,7 @@ export function AIHintsPanel({
   isLoading,
   error,
   onGenerateSummary,
+  onFeedback,
 }: AIHintsPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -41,9 +66,7 @@ export function AIHintsPanel({
   return (
     <div className="bg-gradient-to-b from-purple-900/30 to-gray-800 rounded-xl p-4 h-full flex flex-col border border-purple-500/30">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-purple-200">AI Подсказки</h3>
-        </div>
+        <h3 className="font-semibold text-purple-200">AI Подсказки</h3>
         <div className="flex items-center gap-2">
           {isLoading && (
             <div className="flex items-center gap-1">
@@ -70,34 +93,82 @@ export function AIHintsPanel({
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 text-sm">
         {hints.map((hint) => {
-          const typeStyle = hint.hintType
-            ? HINT_TYPE_STYLES[hint.hintType]
-            : null;
-          const borderClass = typeStyle
-            ? typeStyle.bg
-            : "bg-purple-500/10 border-purple-500/30";
+          const cfg = hint.hintType
+            ? HINT_TYPE_CONFIG[hint.hintType] || DEFAULT_STYLE
+            : DEFAULT_STYLE;
 
           return (
             <div
               key={hint.id}
-              className={`border rounded-lg p-3 space-y-2 ${borderClass}`}
+              className={`border rounded-lg p-3 space-y-2 transition-all ${cfg.bg}`}
             >
-              {typeStyle && (
-                <span className="text-xs font-medium px-2 py-0.5 rounded bg-white/10">
-                  {typeStyle.label}
-                </span>
-              )}
-              <div className="text-purple-100 whitespace-pre-wrap leading-relaxed">
-                {hint.text}
-              </div>
-              <div className="flex items-center justify-between text-xs text-gray-500">
+              <div className="flex items-center justify-between">
                 <span
-                  className="truncate max-w-[150px]"
+                  className={`text-xs font-medium px-2 py-0.5 rounded ${cfg.badge}`}
+                >
+                  {cfg.icon} {cfg.label}
+                </span>
+                <span className="text-[10px] text-gray-500">
+                  {hint.timestamp.toLocaleTimeString()}
+                </span>
+              </div>
+
+              {hint.title && (
+                <p className="font-semibold text-white text-sm">
+                  {hint.title}
+                </p>
+              )}
+
+              <p className="text-purple-100 leading-relaxed">
+                {hint.actionableQuestion || hint.text}
+              </p>
+
+              <div className="flex items-center justify-between pt-1">
+                <span
+                  className="text-[10px] text-gray-500 truncate max-w-[120px]"
                   title={hint.sourceText}
                 >
                   {hint.sourceText.substring(0, 30)}...
                 </span>
-                <span>{hint.timestamp.toLocaleTimeString()}</span>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => onFeedback(hint.id, true)}
+                    className={`p-1 rounded transition-colors ${
+                      hint.isAccepted === true
+                        ? "bg-green-500/30 text-green-300"
+                        : "text-gray-500 hover:text-green-400 hover:bg-green-500/10"
+                    }`}
+                    title="Полезно"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="w-4 h-4"
+                    >
+                      <path d="M1 8.25a1.25 1.25 0 1 1 2.5 0v7.5a1.25 1.25 0 1 1-2.5 0v-7.5ZM5.5 6.046a.75.75 0 0 1 .573-.041 5.28 5.28 0 0 0 2.058.375c.488 0 .96-.064 1.41-.183a.75.75 0 0 1 .96.725v3.578a.75.75 0 0 1-.22.53 8.252 8.252 0 0 0-2.281 5.047.75.75 0 0 1-.748.682h-.011a1.5 1.5 0 0 1-1.491-1.333c-.17-1.418-.756-2.72-1.678-3.753A.75.75 0 0 1 4 11.3V6.616a.75.75 0 0 1 .45-.686l1.05-.464ZM12.75 5.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75v8a.75.75 0 0 1-.75.75h-3a.75.75 0 0 1-.75-.75v-8Z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => onFeedback(hint.id, false)}
+                    className={`p-1 rounded transition-colors ${
+                      hint.isAccepted === false
+                        ? "bg-red-500/30 text-red-300"
+                        : "text-gray-500 hover:text-red-400 hover:bg-red-500/10"
+                    }`}
+                    title="Бесполезно"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="w-4 h-4"
+                    >
+                      <path d="M19 11.75a1.25 1.25 0 1 1-2.5 0v-7.5a1.25 1.25 0 1 1 2.5 0v7.5ZM14.5 13.954a.75.75 0 0 1-.573.041 5.28 5.28 0 0 0-2.058-.375c-.488 0-.96.064-1.41.183a.75.75 0 0 1-.96-.725V9.5a.75.75 0 0 1 .22-.53 8.252 8.252 0 0 0 2.281-5.047.75.75 0 0 1 .748-.682h.011a1.5 1.5 0 0 1 1.491 1.333c.17 1.418.756 2.72 1.678 3.753a.75.75 0 0 1 .072.374v4.684a.75.75 0 0 1-.45.686l-1.05.464ZM7.25 14.5a.75.75 0 0 1-.75.75h-3a.75.75 0 0 1-.75-.75v-8a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75v8Z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           );

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, String, DateTime, Float, ForeignKey, Text
+from sqlalchemy import Boolean, Column, String, DateTime, Float, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.database import Base
@@ -53,6 +53,9 @@ class Hint(Base):
     room_id = Column(UUID(as_uuid=True), ForeignKey("rooms.id"), nullable=False)
     text = Column(Text, nullable=False)
     hint_type = Column(String, nullable=True)
+    title = Column(String, nullable=True)
+    actionable_question = Column(Text, nullable=True)
+    is_accepted = Column(Boolean, nullable=True)
     triggered_by_utterance_id = Column(
         UUID(as_uuid=True), ForeignKey("utterances.id"), nullable=True
     )
