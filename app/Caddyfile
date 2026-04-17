@@ -25,5 +25,5 @@
 		dns duckdns {$DUCKDNS_API_TOKEN}
 	}
 
-	reverse_proxy livekit:7880
+	reverse_proxy host.docker.internal:7880
 }
