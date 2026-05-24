@@ -1,9 +1,14 @@
-from fastapi import APIRouter, Header, HTTPException
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from livekit import api
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database import get_db
 from app.services.auth_service import verify_room_token
+from app.services.room_service import get_room_by_id
 
 router = APIRouter()
 
@@ -23,7 +28,20 @@ class TokenResponse(BaseModel):
 async def create_token(
     request: TokenRequest,
     authorization: str = Header(None),
+    db: AsyncSession = Depends(get_db),
 ):
+    try:
+        room_uuid = UUID(request.room_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Некорректный ID комнаты")
+
+    room = await get_room_by_id(db, room_uuid)
+    if room is None:
+        raise HTTPException(status_code=404, detail="Комната не найдена")
+
+    if room.status == "ended":
+        raise HTTPException(status_code=400, detail="Собеседование уже завершено")
+
     effective_role = request.role
 
     if request.role == "interviewer":

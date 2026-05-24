@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://interview:interview_secret@localhost:5432/interview_db"
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
-    salute_speech_credentials: str
+    salute_speech_credentials: str = ""
     gigachat_credentials: str
     redis_url: str = "redis://localhost:6379/0"
     livekit_api_key: str = "devkey"

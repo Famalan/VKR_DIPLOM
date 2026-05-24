@@ -6,12 +6,14 @@ from pydantic import BaseModel
 
 class RoomCreate(BaseModel):
     position: str | None = None
+    interview_context: str | None = None
 
 
 class RoomResponse(BaseModel):
     id: UUID
     status: str
     position: str | None = None
+    interview_context: str | None = None
     created_at: datetime
     ended_at: datetime | None = None
 

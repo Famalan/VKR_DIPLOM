@@ -7,6 +7,7 @@ from app.database import get_db
 from app.schemas import RoomCreate, RoomResponse, RoomStatusUpdate
 from app.services.room_service import (
     create_room,
+    end_room,
     get_room_by_id,
     update_room_status,
     get_all_rooms,
@@ -21,7 +22,11 @@ async def create_new_room(
     room_data: RoomCreate,
     db: AsyncSession = Depends(get_db),
 ):
-    room = await create_room(db, position=room_data.position)
+    room = await create_room(
+        db,
+        position=room_data.position,
+        interview_context=room_data.interview_context,
+    )
 
     token = create_room_token(
         room_id=str(room.id),
@@ -32,6 +37,7 @@ async def create_new_room(
         "id": room.id,
         "status": room.status,
         "position": room.position,
+        "interview_context": room.interview_context,
         "created_at": room.created_at,
         "ended_at": room.ended_at,
         "token": token,
@@ -62,3 +68,24 @@ async def change_room_status(
     if room is None:
         raise HTTPException(status_code=404, detail="Room not found")
     return room
+
+
+@router.post("/{room_id}/end")
+async def end_interview(
+    room_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Зафиксировать завершение собеседования (идемпотентно).
+
+    Дёргается с фронта при выходе интервьюера через sendBeacon, чтобы
+    duration в отчёте считался по реальному времени окончания, а не по
+    моменту открытия страницы /report.
+    """
+    room = await end_room(db, room_id)
+    if room is None:
+        raise HTTPException(status_code=404, detail="Room not found")
+    return {
+        "id": str(room.id),
+        "status": room.status,
+        "ended_at": room.ended_at.isoformat() if room.ended_at else None,
+    }

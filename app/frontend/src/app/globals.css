@@ -16,6 +16,11 @@
   }
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   color: rgb(var(--foreground-rgb));
   background: linear-gradient(
@@ -24,4 +29,249 @@ body {
       rgb(var(--background-end-rgb))
     )
     rgb(var(--background-start-rgb));
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* ------------------------------------------------------------------ */
+/* AI-подсказка: прогресс «дожития» карточки 25 секунд + light cue   */
+/* ------------------------------------------------------------------ */
+
+@keyframes hintProgress {
+  from { width: 100%; }
+  to   { width: 0%; }
+}
+
+.hint-progress-bar {
+  width: 100%;
+  animation: hintProgress 25s linear forwards;
+}
+
+.cue-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 0.75rem;
+  border-width: 4px;
+  border-style: solid;
+  border-color: transparent;
+  opacity: 0;
+  z-index: 25;
+}
+
+@keyframes cuePulse {
+  0%   { opacity: 0; box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+  20%  { opacity: 1; }
+  100% { opacity: 0; box-shadow: 0 0 32px 8px rgba(255, 255, 255, 0); }
+}
+
+.cue-active.cue-red {
+  border-color: rgba(239, 68, 68, 0.9);
+  animation: cuePulse 1s ease-out;
+  box-shadow: 0 0 32px 6px rgba(239, 68, 68, 0.55) inset,
+              0 0 24px 4px rgba(239, 68, 68, 0.45);
+}
+
+.cue-active.cue-yellow {
+  border-color: rgba(250, 204, 21, 0.9);
+  animation: cuePulse 1s ease-out;
+  box-shadow: 0 0 32px 6px rgba(250, 204, 21, 0.5) inset,
+              0 0 24px 4px rgba(250, 204, 21, 0.4);
+}
+
+.cue-active.cue-green {
+  border-color: rgba(52, 211, 153, 0.9);
+  animation: cuePulse 1s ease-out;
+  box-shadow: 0 0 32px 6px rgba(52, 211, 153, 0.45) inset,
+              0 0 24px 4px rgba(52, 211, 153, 0.35);
+}
+
+/* ------------------------------------------------------------------ */
+/* LiveKit-адаптация:                                                  */
+/* - сохраняем родной layout (`.lk-video-conference` = flex-row,       */
+/*   чат открывается сайдбаром);                                       */
+/* - расширяем CSS-переменную `--lk-control-bar-height`, чтобы видео  */
+/*   корректно вычислило свой `calc(100% - var(...))` с учётом         */
+/*   safe-area iOS;                                                    */
+/* - на узких экранах сжимаем кнопки и превращаем чат в нижний шит.    */
+/* ------------------------------------------------------------------ */
+
+[data-lk-theme] {
+  --lk-control-bar-height: calc(69px + env(safe-area-inset-bottom, 0px));
+}
+
+.lk-video-conference,
+.lk-room-container {
+  height: 100%;
+  min-height: 0;
+  position: relative;
+}
+
+.lk-control-bar {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
+}
+
+/* Скрываем большую кнопку «Start Video», которую LiveKit рисует
+   на месте плитки участника без видеотрека.
+   Силуэт-плейсхолдер участника тоже не нужен — оставляем чёрную
+   плитку с никнеймом и аудио-индикатором. */
+.lk-participant-tile button.lk-button {
+  display: none !important;
+}
+
+.lk-participant-placeholder {
+  background-color: transparent !important;
+}
+
+/* Чат — оверлей внутри видеоконтейнера, не растягивает родителя
+   и не накладывается на соседние блоки (STT/AI) */
+.lk-chat {
+  position: absolute !important;
+  top: 0;
+  right: 0;
+  bottom: var(--lk-control-bar-height);
+  width: min(320px, 100%) !important;
+  max-width: 100% !important;
+  min-height: 0;
+  z-index: 15;
+  background-color: var(--lk-bg2);
+  border-left: 1px solid var(--lk-border-color);
+  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.4);
+}
+
+/* ----- Мобильная адаптация (узкие экраны) ----- */
+@media (max-width: 640px) {
+  [data-lk-theme] {
+    --lk-control-bar-height: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .lk-control-bar {
+    flex-wrap: wrap;
+    gap: 0.25rem !important;
+    padding: 0.4rem 0.5rem !important;
+    padding-bottom: max(0.4rem, env(safe-area-inset-bottom)) !important;
+    justify-content: center;
+  }
+
+  .lk-control-bar .lk-button {
+    padding: 0.45rem 0.55rem !important;
+    font-size: 0.75rem !important;
+  }
+
+  /* Скрываем текстовые подписи кнопок, оставляем иконки */
+  .lk-control-bar .lk-button > span:not([class*="icon"]) {
+    display: none;
+  }
+
+  .lk-button-group-menu {
+    padding: 0.4rem !important;
+  }
+
+  /* На узком экране чат раскрывается на всю ширину видеоблока */
+  .lk-chat {
+    inset: 0 !important;
+    bottom: var(--lk-control-bar-height) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    z-index: 20;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Печать отчёта (window.print → "Сохранить как PDF")                  */
+/* ------------------------------------------------------------------ */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #111111 !important;
+    height: auto !important;
+  }
+
+  body * {
+    visibility: visible !important;
+  }
+
+  /* Убираем элементы, не относящиеся к контенту отчёта */
+  .print\:hidden,
+  header[role="banner"] {
+    display: none !important;
+  }
+
+  /* Скроллируемые блоки разворачиваем целиком, чтобы попало всё */
+  .print-expand,
+  .max-h-\[600px\] {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Текст и фон — печатно-дружелюбные */
+  .bg-gray-800,
+  .bg-gray-700,
+  .bg-gray-700\/40,
+  .bg-gray-700\/60,
+  .from-purple-900\/40,
+  .to-blue-900\/40,
+  .from-purple-900\/30,
+  .to-gray-800 {
+    background: #f5f5f7 !important;
+    color: #111111 !important;
+  }
+
+  .text-white,
+  .text-gray-200,
+  .text-gray-300,
+  .text-gray-400,
+  .text-gray-500,
+  .text-purple-200,
+  .text-purple-300,
+  .text-blue-300,
+  .text-blue-400,
+  .text-green-300,
+  .text-green-400,
+  .text-red-300,
+  .text-red-400,
+  .text-yellow-300 {
+    color: #111111 !important;
+  }
+
+  .border,
+  .border-purple-500\/30,
+  .border-purple-500\/40,
+  .border-red-500\/40,
+  .border-yellow-500\/40,
+  .border-blue-500\/40,
+  .border-green-500\/40 {
+    border-color: #d1d5db !important;
+  }
+
+  /* Лучше избегать обрезов между важных блоков */
+  h1, h2, h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .avoid-break,
+  .grid > div,
+  .space-y-3 > div,
+  .mb-8 > div {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  a[href]::after {
+    content: "";
+  }
 }

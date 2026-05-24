@@ -61,8 +61,14 @@ if [ -n "$MISSING" ]; then
     exit 1
 fi
 
+if [ -z "${SALUTE_SPEECH_CREDENTIALS:-}" ]; then
+    echo "ERROR: SALUTE_SPEECH_CREDENTIALS must be set in .env.prod (SaluteSpeech STT)"
+    exit 1
+fi
+
 echo "  Domain:  $DOMAIN"
 echo "  LiveKit: $LIVEKIT_DOMAIN"
+echo "  STT:     salute (SaluteSpeech gRPC)"
 
 echo "[4/5] Injecting LiveKit secret into livekit.yaml..."
 sed -i "s|CHANGE_ME_LIVEKIT_SECRET|${LIVEKIT_API_SECRET}|g" livekit.yaml

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.services.ai_hints_service import generate_hint, generate_interview_summary
-from app.services.hint_service import create_hint, update_hint_feedback
+from app.services.hint_service import create_hint
 
 router = APIRouter()
 
@@ -16,14 +16,11 @@ class HintRequest(BaseModel):
     text: str
     speaker_role: str = "candidate"
     position: str | None = None
+    interview_context: str | None = None
 
 
 class SummaryRequest(BaseModel):
     room_id: str
-
-
-class FeedbackRequest(BaseModel):
-    is_accepted: bool
 
 
 @router.post("/hint")
@@ -39,6 +36,7 @@ async def get_hint(
         transcription_text=request.text,
         speaker_role=request.speaker_role,
         position=request.position,
+        interview_context=request.interview_context,
     )
 
     if not result["success"]:
@@ -50,8 +48,11 @@ async def get_hint(
         return {
             "id": None,
             "skipped": True,
+            "skip_reason": result.get("skip_reason"),
             "hint": "",
             "hint_type": None,
+            "severity": None,
+            "color": None,
             "title": "",
             "actionable_question": "",
             "tokens_used": result.get("tokens_used", 0),
@@ -67,6 +68,8 @@ async def get_hint(
             hint_type=result.get("hint_type"),
             title=result.get("title"),
             actionable_question=result.get("actionable_question"),
+            severity=result.get("severity"),
+            color=result.get("color"),
         )
         hint_db_id = str(hint_row.id)
     except (ValueError, Exception) as e:
@@ -77,28 +80,12 @@ async def get_hint(
         "skipped": False,
         "hint": result["hint"],
         "hint_type": result.get("hint_type"),
+        "severity": result.get("severity"),
+        "color": result.get("color"),
         "title": result.get("title", ""),
         "actionable_question": result.get("actionable_question", ""),
         "tokens_used": result.get("tokens_used", 0),
     }
-
-
-@router.patch("/hint/{hint_id}/feedback")
-async def submit_feedback(
-    hint_id: str,
-    request: FeedbackRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    try:
-        hint_uuid = UUID(hint_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid hint ID")
-
-    hint = await update_hint_feedback(db, hint_uuid, request.is_accepted)
-    if hint is None:
-        raise HTTPException(status_code=404, detail="Hint not found")
-
-    return {"id": str(hint.id), "is_accepted": hint.is_accepted}
 
 
 @router.post("/summary")

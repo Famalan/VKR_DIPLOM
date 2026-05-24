@@ -5,6 +5,7 @@ import traceback
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.config import settings
 from app.services.transcription_service import run_single_grpc_stream
 from app.services.redis_service import (
     append_to_list,
@@ -15,6 +16,7 @@ from app.services.redis_service import (
 )
 from app.services.ai_hints_service import generate_hint
 from app.services.hint_service import create_hint
+from app.services.room_service import get_room_by_id
 from app.database import async_session_maker
 
 router = APIRouter()
@@ -32,17 +34,44 @@ async def transcription_endpoint(
 ):
     await websocket.accept()
     role_label = ROLE_LABELS.get(role, role)
-    print(f"[STT] Connection opened: {room_id}:{user_id} ({role_label})", flush=True)
+    if not settings.salute_speech_credentials.strip():
+        await websocket.send_json(
+            {"type": "error", "message": "STT: задайте SALUTE_SPEECH_CREDENTIALS в окружении бэкенда"}
+        )
+        await websocket.close()
+        return
+
+    print(
+        f"[STT] Connection opened: {room_id}:{user_id} ({role_label}) provider=salute",
+        flush=True,
+    )
 
     audio_queue = asyncio.Queue()
     cancel_event = asyncio.Event()
     ws_closed = False
 
+    room_position: str | None = None
+    room_interview_context: str | None = None
+    try:
+        async with async_session_maker() as session:
+            room_obj = await get_room_by_id(session, uuid.UUID(room_id))
+            if room_obj is not None:
+                room_position = room_obj.position
+                room_interview_context = room_obj.interview_context
+    except Exception as e:
+        print(f"[STT] Failed to load room context: {e}", flush=True)
+
     async def process_ai_hint_background(text: str):
         try:
             hint_data = None
             for attempt in range(3):
-                hint_data = await generate_hint(room_id, text, speaker_role="candidate")
+                hint_data = await generate_hint(
+                    room_id,
+                    text,
+                    speaker_role="candidate",
+                    position=room_position,
+                    interview_context=room_interview_context,
+                )
                 if hint_data.get("success"):
                     break
                 print(f"[AI] Attempt {attempt + 1} failed: {hint_data.get('error')}", flush=True)
@@ -60,17 +89,22 @@ async def transcription_endpoint(
                     hint_type=hint_data.get("hint_type"),
                     title=hint_data.get("title"),
                     actionable_question=hint_data.get("actionable_question"),
+                    severity=hint_data.get("severity"),
+                    color=hint_data.get("color"),
                 )
 
                 payload = {
                     "id": str(db_hint.id),
                     "dbId": str(db_hint.id),
                     "hintType": hint_data.get("hint_type"),
+                    "severity": hint_data.get("severity"),
+                    "color": hint_data.get("color"),
                     "title": hint_data.get("title", ""),
                     "actionableQuestion": hint_data.get("actionable_question", ""),
                     "text": hint_data.get("hint", ""),
                     "sourceText": text,
                     "tokensUsed": hint_data.get("tokens_used", 0),
+                    "topic": hint_data.get("topic"),
                 }
 
                 await publish(f"room:{room_id}:hints", json.dumps(payload))
@@ -167,7 +201,6 @@ async def transcription_endpoint(
     try:
         while not ws_closed and not cancel_event.is_set():
             print(f"[STT] Starting gRPC stream for {room_id}:{user_id}", flush=True)
-
             await run_single_grpc_stream(
                 audio_queue=audio_queue,
                 on_result_callback=on_result,
@@ -180,7 +213,7 @@ async def transcription_endpoint(
 
             try:
                 await websocket.send_json({"type": "reconnecting"})
-                print("[STT] Reconnecting gRPC stream...", flush=True)
+                print("[STT] Reconnecting STT (salute)...", flush=True)
             except Exception:
                 break
 

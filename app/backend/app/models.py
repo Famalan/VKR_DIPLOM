@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, String, DateTime, Float, ForeignKey, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, Column, String, DateTime, Float, ForeignKey, Integer, Text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.database import Base
 
@@ -13,6 +13,8 @@ class Room(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     status = Column(String, default="waiting")
     position = Column(String, nullable=True)
+    interview_context = Column(Text, nullable=True)
+    report_data = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     ended_at = Column(DateTime, nullable=True)
 
@@ -55,6 +57,8 @@ class Hint(Base):
     hint_type = Column(String, nullable=True)
     title = Column(String, nullable=True)
     actionable_question = Column(Text, nullable=True)
+    severity = Column(Integer, nullable=True)
+    color = Column(String, nullable=True)
     is_accepted = Column(Boolean, nullable=True)
     triggered_by_utterance_id = Column(
         UUID(as_uuid=True), ForeignKey("utterances.id"), nullable=True

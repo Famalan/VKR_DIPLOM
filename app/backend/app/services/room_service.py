@@ -7,8 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Room
 
 
-async def create_room(db: AsyncSession, position: str | None = None) -> Room:
-    room = Room(position=position)
+async def create_room(
+    db: AsyncSession,
+    position: str | None = None,
+    interview_context: str | None = None,
+) -> Room:
+    room = Room(position=position, interview_context=interview_context)
     db.add(room)
     await db.commit()
     await db.refresh(room)
@@ -37,3 +41,29 @@ async def update_room_status(db: AsyncSession, room_id: UUID, status: str) -> Ro
 async def get_all_rooms(db: AsyncSession) -> list[Room]:
     result = await db.execute(select(Room).order_by(Room.created_at.desc()))
     return list(result.scalars().all())
+
+
+async def end_room(db: AsyncSession, room_id: UUID) -> Room | None:
+    """Зафиксировать ended_at + status='ended' идемпотентно."""
+    room = await get_room_by_id(db, room_id)
+    if room is None:
+        return None
+    if room.ended_at is not None:
+        return room
+    room.status = "ended"
+    room.ended_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(room)
+    return room
+
+
+async def save_report_data(
+    db: AsyncSession, room_id: UUID, data: dict
+) -> Room | None:
+    room = await get_room_by_id(db, room_id)
+    if room is None:
+        return None
+    room.report_data = data
+    await db.commit()
+    await db.refresh(room)
+    return room

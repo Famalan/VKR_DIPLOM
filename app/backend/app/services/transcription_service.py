@@ -14,6 +14,33 @@ TOKEN_URL = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
 CERTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "certs")
 SBER_CA_PATH = os.path.join(CERTS_DIR, "sber_root_ca.pem")
 
+TECH_VOCABULARY = [
+    "gRPC", "REST", "API", "WebSocket", "HTTP", "HTTPS",
+    "Docker", "Kubernetes", "CI/CD", "DevOps", "nginx",
+    "SQL", "NoSQL", "PostgreSQL", "MySQL", "MongoDB", "Redis",
+    "Python", "FastAPI", "Django", "Flask",
+    "JavaScript", "TypeScript", "React", "Next.js", "Node.js", "Vue",
+    "Git", "GitHub", "GitLab",
+    "Linux", "Ubuntu", "Bash",
+    "AWS", "Azure", "GCP",
+    "JWT", "OAuth", "SSL", "TLS",
+    "JSON", "XML", "YAML", "CSV",
+    "HTML", "CSS", "Tailwind",
+    "SOLID", "DRY", "KISS", "YAGNI",
+    "Agile", "Scrum", "Kanban",
+    "microservices", "monolith", "serverless",
+    "GraphQL", "WebRTC", "LiveKit",
+    "Kafka", "RabbitMQ", "Celery",
+    "pytest", "unittest", "Jest",
+    "ORM", "SQLAlchemy", "Alembic",
+    "Pydantic", "FastAPI", "Uvicorn",
+    "HashMap", "LinkedList", "B-tree",
+    "async", "await", "coroutine",
+    "frontend", "backend", "fullstack",
+    "deploy", "rollback", "pipeline",
+    "load balancer", "reverse proxy", "CDN",
+]
+
 
 async def get_access_token() -> str:
     async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
@@ -34,12 +61,15 @@ async def get_access_token() -> str:
 def _build_options_request() -> recognition_pb2.RecognitionRequest:
     from google.protobuf.duration_pb2 import Duration
 
+    hints = recognition_pb2.Hints(words=TECH_VOCABULARY)
+
     options = recognition_pb2.RecognitionOptions(
         audio_encoding=recognition_pb2.RecognitionOptions.PCM_S16LE,
         sample_rate=16000,
         language="ru-RU",
         model="general",
         hypotheses_count=1,
+        hints=hints,
         enable_partial_results=True,
         enable_multi_utterance=True,
         enable_profanity_filter=False,

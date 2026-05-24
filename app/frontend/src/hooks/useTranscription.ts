@@ -40,6 +40,11 @@ export function useTranscription({
   const audioContextRef = useRef<AudioContext | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const onHintReceivedRef = useRef(onHintReceived);
+  onHintReceivedRef.current = onHintReceived;
+
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const startStreaming = useCallback(async () => {
     if (!stream) return;
@@ -51,6 +56,7 @@ export function useTranscription({
     }
 
     try {
+      setServerError(null);
       const wsUrl = `${config.wsUrl}/ws/transcribe/${roomId}/${userId}/${role}`;
       const ws = new WebSocket(wsUrl);
 
@@ -81,25 +87,38 @@ export function useTranscription({
             setCurrentText(data.text);
           }
         } else if (data.type === "hint") {
-          if (onHintReceived && data.payload) {
-            onHintReceived({
+          const cb = onHintReceivedRef.current;
+          if (cb && data.payload) {
+            const rawColor = (data.payload.color || "").toString().toLowerCase();
+            const color =
+              rawColor === "red" || rawColor === "yellow" || rawColor === "green"
+                ? (rawColor as "red" | "yellow" | "green")
+                : null;
+            cb({
               id: `hint_${Date.now()}`,
               dbId: data.payload.dbId || null,
               hintType: data.payload.hintType || null,
+              severity:
+                typeof data.payload.severity === "number"
+                  ? data.payload.severity
+                  : null,
+              color,
               title: data.payload.title || "",
               actionableQuestion: data.payload.actionableQuestion || "",
               text: data.payload.text || "",
               sourceText: data.payload.sourceText || "",
+              topic: data.payload.topic || null,
               timestamp: new Date(),
               tokensUsed: data.payload.tokensUsed || 0,
-              isAccepted: null,
             });
           }
         } else if (data.type === "reconnecting") {
           setIsReconnecting(true);
           setCurrentText("");
         } else if (data.type === "error") {
-          console.error("[STT] Server error:", data.message);
+          const msg = data.message || "Ошибка STT";
+          console.error("[STT] Server error:", msg);
+          setServerError(msg);
         }
       };
 
@@ -126,6 +145,11 @@ export function useTranscription({
       const audioContext = new AudioContext({ sampleRate: 48000 });
       audioContextRef.current = audioContext;
 
+      if (audioContext.state === "suspended") {
+        await audioContext.resume();
+        console.log("[STT] AudioContext resumed, state=", audioContext.state);
+      }
+
       await audioContext.audioWorklet.addModule("/audio-processor.js");
 
       const source = audioContext.createMediaStreamSource(audioStream);
@@ -142,7 +166,11 @@ export function useTranscription({
       };
 
       source.connect(workletNode);
-      workletNode.connect(audioContext.destination);
+      const gain = audioContext.createGain();
+      gain.gain.value = 0;
+      gainNodeRef.current = gain;
+      workletNode.connect(gain);
+      gain.connect(audioContext.destination);
 
       console.log("[STT] Audio pipeline started (AudioWorklet -> WebSocket -> gRPC)");
     } catch (error) {
