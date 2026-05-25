@@ -19,8 +19,40 @@ import { useTranscription } from '@/hooks/useTranscription';
 import { useAIHints, AIHint } from '@/hooks/useAIHints';
 import { useLiveKit } from '@/hooks/useLiveKit';
 
+const MEDIA_PERMISSION_MESSAGE =
+  'Камера или микрофон недоступны. Подключение к комнате сохранено.';
+
 function generateUserId(): string {
   return `user_${Math.random().toString(36).substring(2, 9)}`;
+}
+
+function getErrorInfo(error: unknown): { name: string; message: string } {
+  if (error instanceof Error) {
+    return { name: error.name, message: error.message };
+  }
+  if (typeof error === 'object' && error !== null) {
+    const record = error as Record<string, unknown>;
+    return {
+      name: typeof record.name === 'string' ? record.name : '',
+      message: typeof record.message === 'string' ? record.message : String(error),
+    };
+  }
+  return { name: '', message: String(error) };
+}
+
+function isMediaPermissionError(error: unknown): boolean {
+  const { name, message } = getErrorInfo(error);
+  const normalizedName = name.toLowerCase();
+  const normalizedMessage = message.toLowerCase();
+
+  return (
+    normalizedName === 'notallowederror' ||
+    normalizedName === 'permissiondeniederror' ||
+    normalizedMessage.includes('permission denied') ||
+    normalizedMessage.includes('permission dismissed') ||
+    normalizedMessage.includes('notallowederror') ||
+    normalizedMessage.includes('permissiondeniederror')
+  );
 }
 
 function RoomContent({
@@ -28,11 +60,13 @@ function RoomContent({
   userId,
   role,
   onLeave,
+  mediaWarning,
 }: {
   roomId: string;
   userId: string;
   role: 'interviewer' | 'candidate';
   onLeave: () => void;
+  mediaWarning: string | null;
 }) {
   const [transcriptionEnabled, setTranscriptionEnabled] = useState(role === 'candidate');
   const [aiEnabled, setAiEnabled] = useState(false);
@@ -210,6 +244,11 @@ function RoomContent({
           {toast}
         </div>
       )}
+      {mediaWarning && (
+        <div className="mx-2 sm:mx-3 mb-2 rounded-lg border border-amber-500/30 bg-amber-500/15 px-3 py-2 text-xs sm:text-sm text-amber-100">
+          {mediaWarning}
+        </div>
+      )}
 
       <div className="flex-1 flex flex-col lg:flex-row gap-2 sm:gap-3 p-2 sm:p-3 min-h-0 overflow-hidden">
         <div
@@ -281,6 +320,7 @@ export default function RoomPage() {
   const [hasJoined, setHasJoined] = useState(false);
   const [roomStatus, setRoomStatus] = useState<'loading' | 'ok' | 'not_found' | 'ended'>('loading');
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [mediaWarning, setMediaWarning] = useState<string | null>(null);
   const intentionalLeaveRef = useRef(false);
 
   const { token, wsUrl, isLoading, error, fetchToken } = useLiveKit({
@@ -318,6 +358,7 @@ export default function RoomPage() {
   const handleJoin = async () => {
     try {
       setConnectionError(null);
+      setMediaWarning(null);
       await fetchToken();
       setHasJoined(true);
     } catch (err) {
@@ -452,15 +493,29 @@ export default function RoomPage() {
       onError={(err) => {
         console.error('[LiveKit] Connection error:', err);
         if (intentionalLeaveRef.current) return;
+        if (isMediaPermissionError(err)) {
+          setConnectionError(null);
+          setMediaWarning(MEDIA_PERMISSION_MESSAGE);
+          return;
+        }
         setConnectionError(
           'Ошибка подключения к видеосерверу. Попробуйте перезагрузить страницу.'
         );
         setHasJoined(false);
       }}
+      onMediaDeviceFailure={() => {
+        setMediaWarning(MEDIA_PERMISSION_MESSAGE);
+      }}
       data-lk-theme="default"
       style={{ height: '100svh' }}
     >
-      <RoomContent roomId={roomId} userId={userId} role={role} onLeave={handleLeave} />
+      <RoomContent
+        roomId={roomId}
+        userId={userId}
+        role={role}
+        onLeave={handleLeave}
+        mediaWarning={mediaWarning}
+      />
     </LiveKitRoom>
   );
 }
