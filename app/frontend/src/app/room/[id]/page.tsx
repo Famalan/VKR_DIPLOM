@@ -281,6 +281,7 @@ export default function RoomPage() {
   const [hasJoined, setHasJoined] = useState(false);
   const [roomStatus, setRoomStatus] = useState<'loading' | 'ok' | 'not_found' | 'ended'>('loading');
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const intentionalLeaveRef = useRef(false);
 
   const { token, wsUrl, isLoading, error, fetchToken } = useLiveKit({
     roomId,
@@ -327,7 +328,17 @@ export default function RoomPage() {
   };
 
   const handleLeave = () => {
+    intentionalLeaveRef.current = true;
     router.push('/');
+  };
+
+  const handleDisconnected = (reason?: unknown) => {
+    if (intentionalLeaveRef.current) return;
+    console.warn('[LiveKit] Disconnected, reason:', reason);
+    setConnectionError(
+      'Соединение с видеосервером прервано. Проверьте интернет и попробуйте подключиться снова.'
+    );
+    setHasJoined(false);
   };
 
   if (roomStatus === 'loading') {
@@ -437,9 +448,10 @@ export default function RoomPage() {
       connect={true}
       audio={true}
       video={true}
-      onDisconnected={handleLeave}
+      onDisconnected={handleDisconnected}
       onError={(err) => {
         console.error('[LiveKit] Connection error:', err);
+        if (intentionalLeaveRef.current) return;
         setConnectionError(
           'Ошибка подключения к видеосерверу. Попробуйте перезагрузить страницу.'
         );
