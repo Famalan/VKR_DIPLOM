@@ -1,3 +1,9 @@
+{
+	servers :443 {
+		protocols h1
+	}
+}
+
 {$DOMAIN} {
 	tls {
 		dns duckdns {$DUCKDNS_API_TOKEN}
@@ -24,6 +30,8 @@
 	tls {
 		dns duckdns {$DUCKDNS_API_TOKEN}
 	}
+
+	header Alt-Svc "clear"
 
 	reverse_proxy host.docker.internal:7880
 }
